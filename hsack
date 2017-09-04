@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# HATHWAY IP SCAN & CONNECT ! [g3ky]
+# USAGE : hsack <interface> <network> [ <start_host> <end_host> | ip_file ]
+#	  hsack - Check current working connection.
+
+#reset;
+
+echo "";
+echo " HATHWAY IP SCAN & CONNECT";
+echo " =========================";
+echo "  NEW! Press x to skip ip ";
+echo " =========================";
+
+DOTCOUNT=20;
+PINGFAIL=10;
+SLEEP=3;
+
+pingip="8.8.8.8";
+# pingip="192.64.170.100";
+
+pfail=$PINGFAIL;
+dcount=$DOTCOUNT;
+pavg=0;
+pavg2=0;
+status=0;
+
+
+	function ping()
+	{
+		sleep 1s;
+		fping -q "$pingip" 2> /dev/null;
+		status=$?;
+		pout=$(fping -qC 1 8.8.8.8 2>&1);
+		fping=$(echo "$pout" | cut -d ' ' -f 3 | cut -d '.' -f 1);
+	}
+
+                if [ -z "$2" ]
+                        then
+                                ip1=0; 
+				ip2=0; 
+                        fi
+
+
+		if [ -z "$4" ] && [ ! -z "$3" ]
+			then
+				ip1=$3; ip2=$3; 
+			elif [ ! -z "$3" ] && [ ! -z "$4" ]
+			then
+				ip1=$3; ip2=$4;
+			fi
+
+
+
+		if [ ! -z "$3" ] && [ -f $3 ]
+			then 
+				echo -e "\nScanning IP(s) from file.."
+				ipset=$(cut $3 -d. -f4 | sort -n);
+			else
+				ipset=$(seq "$ip1" "$ip2");
+			fi
+
+		for ip in $ipset
+		do 
+
+			if [ "$ip1" != 0 ] && [ "$ip2" != 0 ]
+			then
+			#ifconfig "$1" down;
+			ifconfig "$1" "$2"."$ip" up 2> /dev/null; 
+			route add default gw "$2".1 "$1" 2> /dev/null;
+			fi
+
+			ping;
+
+			if [ $status -eq 0 ] && [ ! -z "$3" ] 
+			then
+				echo -en "\n\n^ ";
+
+				echo -e "$2.$ip" | tee -a "log/$2.log";
+				#sort -k4 -n -t. "log/$2.log" | uniq > log/temp; mv log/temp "log/$2_`date +%F`.log";
+				sort -k4 -n -t. "log/$2.log" | uniq > log/temp; mv log/temp "log/$2.log";
+
+				play ding.wav&>/dev/null;
+				dcount=$DOTCOUNT;
+
+			elif [ ! -z "$3"  ]
+			then
+				echo -en "\nv $2.$ip ";
+				play beep.wav&>/dev/null;
+				continue;
+			fi
+			
+			echo "";
+			for ((;;)) 
+			do
+	
+			#sleep "$SLEEP"s;
+
+			read -t $SLEEP -n 1 key
+
+				if [[ $key = x ]]
+				    then
+					echo "";
+					break;
+				    fi
+
+			ping; 
+
+			if [ $status -eq 1 ] && [ $dcount != 0 ]; 
+				then 
+					echo -n "v";
+					((dcount--));
+					play beep.wav&>/dev/null;
+
+						if [ $pfail -eq 1 ] # && [ ! -z "$4" ]; COMMENTED THIS!	
+							then 
+								pfail=$PINGFAIL; # Re-Initialize loop! 
+								echo "";
+								break;
+							else 
+								((pfail--)); 
+						fi
+				else 
+
+					if [ $dcount -eq 0 ]
+						then 
+							dcount=$DOTCOUNT;
+
+							echo " $((pavg/$DOTCOUNT)) [$((pavg2/$DOTCOUNT))] ";
+							pavg2=0;
+
+							pfail=$PINGFAIL; # Re-Initialize loop! 
+						else 
+								if [ $fping == "-" ]
+								then
+									fping=0;
+								fi
+
+							pavg=$((fping-pavg));
+							pavg2=$((fping+pavg2));
+							
+							if [ $pavg -lt 0 ] 
+								then
+								pavg=$((-1*pavg));
+							fi
+
+							echo -n "."; 
+							((dcount--));
+							#pfail=$PINGFAIL; # Re-Initialize loop! 
+							
+						fi
+
+				fi
+			done 
+		done
+
+echo -e "\n\n Scan complete... "
